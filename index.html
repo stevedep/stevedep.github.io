@@ -88,10 +88,11 @@
           }
         ]
       };
+      
 
       const options = {
         "elk.algorithm": "layered",
-     //   "elk.hierarchyHandling": "INCLUDE_CHILDREN",
+      //  "elk.hierarchyHandling": "INCLUDE_CHILDREN",
         "elk.direction": "RIGHT",
         "elk.spacing.nodeNode": "50",
         "elk.spacing.edgeEdge": "50",
@@ -115,6 +116,7 @@
       // Perform the layout
       elk.layout({ ...graph, layoutOptions: options })
         .then(layoutedGraph => {
+          console.log('ELK layout result:', layoutedGraph);
           visualizeGraph(layoutedGraph);
         })
         .catch(error => {
