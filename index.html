@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ELKjs Graph Layout Example with D3.js Visualization</title>
+  <style>
+    svg {
+      border: 1px solid black;
+    }
+    rect {
+      stroke: black;
+    }
+    line {
+      stroke: black;
+    }
+  </style>
+</head>
+<body>
+  <h1>ELKjs Graph Layout Example with D3.js Visualization</h1>
+  <div>
+    <svg id="graph" width="1200" height="800"></svg>
+  </div>
+
+  <!-- Include ELKjs version 0.8.2 from a CDN -->
+  <script src="https://unpkg.com/elkjs@0.8.2/lib/elk.bundled.js"></script>
+  <!-- Include D3.js from a CDN -->
+  <script src="https://d3js.org/d3.v6.min.js"></script>
+  <script>
+    if (typeof ELK !== 'undefined') {
+      const elk = new ELK();
+
+      const graph = {
+        "id": "root",
+        "children": [
+          { "id": "source", "width": 50, "height": 50 },
+          {
+            "id": "group",
+            "layoutOptions": { "elk.direction": "LEFT", "elk.hierarchyHandling": "SEPARATE_CHILDREN" },
+            "children": [
+              { "id": "next", "width": 50, "height": 50 },
+              { "id": "next2", "width": 50, "height": 50 }
+            ],
+            "edges": [{ "id": "e55", "sources": ["next"], "targets": ["next2"] }]
+          },
+          {
+            "id": "outside",
+            "layoutOptions": { "elk.direction": "RIGHT", "elk.hierarchyHandling": "INCLUDE_CHILDREN" },
+            "children": [
+              {
+                "id": "inside",
+                "layoutOptions": { "elk.direction": "DOWN", "elk.hierarchyHandling": "SEPARATE_CHILDREN" },
+                "edges": [{ "id": "e11", "sources": ["source"], "targets": ["n1"] }],
+                "children": [
+                  { "id": "n1", "width": 50, "height": 50 },
+                  { "id": "n2", "width": 50, "height": 50 }
+                ],
+                "edges": [
+                  { "id": "e1", "sources": ["n1"], "targets": ["n2"] },
+                  { "id": "123", "sources": ["source"], "targets": ["n2"] }
+                ]
+              },
+              {
+                "id": "insideOtherLayout",
+                "layoutOptions": { "elk.algorithm": "layered", "elk.hierarchyHandling": "SEPARATE_CHILDREN", "elk.direction": "UP" },
+                "children": [
+                  { "id": "n3", "width": 50, "height": 50 },
+                  { "id": "n4", "width": 50, "height": 50 },
+                  { "id": "n5", "width": 50, "height": 50 }
+                ],
+                "edges": [
+                  { "id": "e2", "sources": ["n3"], "targets": ["n4"] },
+                  { "id": "e3", "sources": ["n4"], "targets": ["n5"] },
+                  { "id": "e4", "sources": ["n5"], "targets": ["n3"] },
+                  { "id": "e7", "sources": ["n5"], "targets": ["next2"] }
+                ]
+              },
+              {
+                "id": "insideOtherDirection",
+                "layoutOptions": { "elk.direction": "RIGHT", "elk.hierarchyHandling": "SEPARATE_CHILDREN" },
+                "children": [
+                  { "id": "n6", "width": 50, "height": 50 },
+                  { "id": "n7", "width": 50, "height": 50 }
+                ],
+                "edges": [{ "id": "e5", "sources": ["n6"], "targets": ["n7"] }]
+              }
+            ]
+          }
+        ]
+      };
+
+      const options = {
+        "elk.algorithm": "layered",
+        "elk.hierarchyHandling": "INCLUDE_CHILDREN",
+        "elk.direction": "RIGHT",
+        "elk.spacing.nodeNode": "50",
+        "elk.spacing.edgeEdge": "50",
+        "elk.spacing.edgeNode": "50"
+      };
+
+      // Function to add parent references
+      function addParentReferences(node, parent = null) {
+        node.parent = parent ? parent.id : null;
+        if (node.children) {
+          node.children.forEach(child => addParentReferences(child, node));
+        }
+        if (node.edges) {
+          node.edges.forEach(edge => edge.parent = node.id);
+        }
+      }
+
+      // Add parent references
+      addParentReferences(graph);
+
+      // Perform the layout
+      elk.layout({ ...graph, layoutOptions: options })
+        .then(layoutedGraph => {
+          visualizeGraph(layoutedGraph);
+        })
+        .catch(error => {
+          console.error('ELK layout error:', error);
+        });
+    } else {
+      console.error('ELKjs not loaded');
+    }
+
+    function visualizeGraph(graph) {
+      const svg = d3.select("#graph");
+      svg.selectAll("*").remove();
+
+      const rootGroup = svg.append("g").attr("class", "root");
+      const edgeGroup = svg.append("g").attr("class", "edges");
+
+      function drawNode(node, parentGroup, parentTransform = { x: 0, y: 0 }) {
+        const nodeG = parentGroup.append("g")
+          .attr("transform", `translate(${node.x},${node.y})`);
+
+        const currentTransform = {
+          x: parentTransform.x + node.x,
+          y: parentTransform.y + node.y,
+        };
+
+        nodeG.append("rect")
+          .attr("width", node.width)
+          .attr("height", node.height)
+          .attr("fill", "lightblue");
+
+        nodeG.node()._transform = currentTransform; // Save the transform in the DOM element for later use
+
+        if (node.children) {
+          node.children.forEach(childNode => drawNode(childNode, nodeG, currentTransform));
+        }
+
+        if (node.edges) {
+          node.edges.forEach(edge => drawEdge(edge, edgeGroup, currentTransform));
+        }
+      }
+
+      function drawEdge(edge, edgeGroup, parentTransform) {
+        if (edge.sections) {
+          edge.sections.forEach(section => {
+            let points = [section.startPoint].concat(section.bendPoints || []).concat(section.endPoint);
+            for (let i = 0; i < points.length - 1; i++) {
+              edgeGroup.append("line")
+                .attr("x1", points[i].x + parentTransform.x)
+                .attr("y1", points[i].y + parentTransform.y)
+                .attr("x2", points[i + 1].x + parentTransform.x)
+                .attr("y2", points[i + 1].y + parentTransform.y)
+                .attr("stroke", "black");
+            }
+          });
+        } else {
+          const sourceNode = findNodeById(graph, edge.sources[0]);
+          const targetNode = findNodeById(graph, edge.targets[0]);
+          if (sourceNode && targetNode) {
+            const sourceCoords = getAbsoluteCoordinates(graph, sourceNode);
+            const targetCoords = getAbsoluteCoordinates(graph, targetNode);
+            edgeGroup.append("line")
+              .attr("x1", sourceCoords.x)
+              .attr("y1", sourceCoords.y)
+              .attr("x2", targetCoords.x)
+              .attr("y2", targetCoords.y)
+              .attr("stroke", "black");
+          }
+        }
+      }
+
+      function findNodeById(graph, id) {
+        let result = null;
+        if (graph.id === id) {
+          return graph;
+        }
+        if (graph.children) {
+          for (let child of graph.children) {
+            result = findNodeById(child, id);
+            if (result) {
+              return result;
+            }
+          }
+        }
+        return result;
+      }
+
+      function getAbsoluteCoordinates(graph, node) {
+        let x = node.x + node.width / 2;
+        let y = node.y + node.height / 2;
+        let currentNode = node;
+        while (currentNode.parent) {
+          currentNode = findNodeById(graph, currentNode.parent);
+          x += currentNode.x;
+          y += currentNode.y;
+        }
+        return { x, y };
+      }
+
+      graph.children.forEach(node => {
+        drawNode(node, rootGroup);
+      });
+
+      if (graph.edges) {
+        graph.edges.forEach(edge => drawEdge(edge, edgeGroup, { x: 0, y: 0 }));
+      }
+    }
+  </script>
+</body>
+</html>
